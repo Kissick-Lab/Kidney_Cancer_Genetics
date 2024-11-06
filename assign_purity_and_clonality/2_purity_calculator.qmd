@@ -1,0 +1,116 @@
+---
+title: "2_purity_calculator"
+format: html
+editor: visual
+jupyter: python3
+---
+
+```{r}
+library(sBIC)
+library(MASS)
+library(cardelino)
+```
+
+q = highest p of success (clonal mutations) (psi need to be \> 10% & nrow \> 50 otherwise q = 0) (more than 10% (more than 5) mutations are clonal)
+
+if 1 copy q = q if 2 copy q = 2 \* q (if \> 1 then = 1)
+
+max of q from 1 vs 2 copy
+
+reasoning: if you have a large population of mutations that fit expected frequency / higher you are probably 100% pure
+
+```{r}
+# 1 copy fit 
+# find top condition (highest p of success)
+
+tmp = read.csv("output/purity/1copy_fit_24hi.csv")
+tmp = tmp[2:nrow(tmp),]
+max = unlist(apply(tmp,1, function(x) which.max(x[3:5]))) 
+tmp = data.frame(tmp, max)
+
+# get psi from highest p
+max_psi = apply(tmp, 1, function(x) as.numeric(x[6:8])[as.numeric(x[9])])
+tmp = data.frame(tmp,max_psi)
+
+i = 1
+purities = c()
+p_calc = c()
+for (i in seq(from = 1, to = nrow(tmp))){
+  tmp_row = tmp[i,]
+  pos = as.numeric(tmp_row[9])
+  if (tmp_row$max_psi > 0.1 & as.numeric(tmp_row$X.n.) > 50){ 
+    # more than 10% of mutation belong to most likely to be clonal group
+    # more than 50 observation
+    
+    q = as.numeric(unlist(tmp_row[3:5][pos])) # purity q = highest p 
+  }
+  else {
+    print("nope")
+    q = 0
+  }
+  
+  if(as.numeric(q) > 0.9){
+    pcalc_tmp = q
+  }
+  if(as.numeric(q) < 0.9){
+    pcalc_tmp = q
+  }
+  p_calc = c(p_calc, pcalc_tmp)
+   
+  purities = c(purities, q)
+  
+}
+
+data.frame(tmp[,1:5],purities)
+
+# 2 copy fit
+tmp = read.csv("output/purity/2copy_fit_24hi.csv")
+tmp = tmp[2:nrow(tmp),]
+tmp
+closest = unlist(apply(tmp, 1, function(x) which.max(as.numeric(x[3:4])))) 
+
+tmp = data.frame(tmp, closest)
+tmp
+
+
+max_psi = apply(tmp,1,function(x) as.numeric(x[5:6])[as.numeric(x[7])])
+tmp = data.frame(tmp,max_psi)
+
+i = 1
+purities_2 = c()
+p2_calc = c()
+for (i in seq(from = 1, to = nrow(tmp))){
+  tmp_row = tmp[i,]
+  pos = as.numeric(tmp_row[7])
+  if (tmp_row$max_psi > 0.1 & as.numeric(tmp_row$X.n.) > 50){
+    q = as.numeric(unlist(tmp_row[3:4][pos]))
+  }
+  else {
+    q = 0
+  }
+  
+  # only for 2 copy
+  purities_2 = c(purities_2, q)
+  
+  if(as.numeric(q) > 0.5){
+    p2calc_tmp = 1
+  }
+  if(as.numeric(q) < 0.5){
+    p2calc_tmp = 2*q
+  }
+  p2_calc = c(p2_calc, p2calc_tmp)
+}
+
+data.frame(tmp[,1], purities, purities_2, p_calc, p2_calc)
+purities_2
+p = apply(data.frame(p_calc, p2_calc), 1, function(x) max(x))
+
+write.csv(data.frame(tmp[,1], p), "output/purity/24hi_purity.csv")
+data.frame(tmp[,1],p)
+
+
+
+
+
+
+```

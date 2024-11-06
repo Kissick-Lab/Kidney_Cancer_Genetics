@@ -1,0 +1,130 @@
+---
+title: "1_binomal_assignment"
+format: html
+editor: visual
+jupyter: python3
+---
+
+```{r}
+library(sBIC)
+library(MASS)
+library(cardelino)
+```
+
+2 copy = 2 binomial component 1 clonal (high p) 1 subclonal (low p) 1 copy = 3 binomial component
+
+```{r}
+
+
+## we'll just look at hi population as example
+files = grep(list.files("input/snv",full.names = T),pattern = 'hi',value = T) 
+
+
+
+par(mfrow = c(10,10),mar = c(0,0,0,0))
+tmpdf = data.frame('name','n','p1','p2','psi1','psi2')
+
+# 2 copy estimate
+for (f in files){
+  f = files
+  print(f)
+  cd24 = read.csv(f, header = T)
+
+  ## V42 = reads with mutation V41 = total reads V44 = copy number 
+  cd24_2_copies = cd24[cd24$V41 > 10 & cd24$V44 == 2 & abs(cd24$V45) < 0.2,]
+  head(cd24)
+  
+  ## keep nrow <= 3000 by selecting higher V41 threshold
+  n = nrow(cd24_2_copies)
+  for(i in seq(from = 10, to = 40)){
+    if (nrow(cd24_2_copies) > 3000){
+      cd24_2_copies = cd24[cd24$V41 > i & cd24$V44 == 2 & abs(cd24$V45) < 0.2,]
+      print(nrow(cd24_2_copies))
+      n = nrow(cd24_2_copies)
+    }
+  }
+  
+  
+  two_copy = mixBinom(cd24_2_copies$V42, cd24_2_copies$V41, n_components = 2)
+  ## k = num of success n = num of trials n_components = num of components
+  two_copy
+  
+  tmpp = two_copy$p ## probability of achieving success in component 1 & component 2
+  tmpm = two_copy$psi ## proportion of total population belonging to 1st & 2nd binomial components
+  
+  
+  names(cd24_2_copies)
+  hist(cd24_2_copies$V42/cd24_2_copies$V41, breaks = 30)
+  
+  tmp = c(basename(f),n,tmpp,tmpm)
+  names(tmp) = c('name', 'n', 'p1', 'p2', 'psi1', 'psi2')
+  tmpdf = rbind(tmpdf, tmp)
+  tmpdf
+  
+}
+
+tmpdf
+
+write.csv(tmpdf,"output/purity/2copy_fit_24hi.csv",row.names = F)
+
+#1 copy
+tmpdf = data.frame('name','n','p1','p2','p3','psi1','psi2','psi3') 
+
+for (f in files){
+  
+  cd24 = read.csv(f,header = T)
+  print(f)
+  
+  cd24_1_copies = cd24[cd24$V41 > 10 & cd24$V44 == 1 & cd24$V45 < 0.5*-1,]
+  cd24_1_copies
+  
+  n = nrow(cd24_1_copies)
+  if (nrow(cd24_1_copies) == 0){
+    cd24_1_copies = cd24[1,]
+    
+  }
+  for(i in seq(from = 10, to = 40)){
+    if (nrow(cd24_1_copies)>3000){
+      cd24_1_copies = cd24[cd24$V41 > i & cd24$V44 == 1 & cd24$V45 < 0.5*-1,]
+      print(nrow(cd24_1_copies))
+      n = nrow(cd24_1_copies)
+    }
+  }
+  
+  
+  one_copy = mixBinom(cd24_1_copies$V42, cd24_1_copies$V41, n_components = 3) # 3 binomial components
+  
+  
+  tmpp = one_copy$p
+  tmpm = one_copy$psi
+
+
+  
+  hist(cd24_1_copies[,25]/cd24_1_copies[,24], breaks = 30)
+  
+  tmp = c(basename(f),n,tmpp,tmpm)
+  names(tmp) = c('name','n','p1','p2','p3','psi1','psi2','psi3')
+  tmpdf = rbind(tmpdf,tmp)
+  tmpdf
+} 
+
+tmpdf
+write.csv(tmpdf,"output/purity/1copy_fit_24hi.csv",row.names = F)
+
+
+
+# purity
+
+cd24hi_1copy = read.csv("output/purity/1copy_fit_24hi.csv")
+cd24hi_2copy = read.csv("output/purity/2copy_fit_24hi.csv")
+cd24hi_1copy = cd24hi_1copy[2:nrow(cd24hi_1copy),]
+cd24hi_2copy = cd24hi_2copy[2:nrow(cd24hi_2copy),]
+
+max_p = c(as.matrix(apply(cd24hi_1copy, 1, function(x) which.max(x[3:5]))))
+max_ps = c(as.matrix(apply(cd24hi_1copy,1, function(x) which.max(x[6:8]))))
+cd24hi_1copy = data.frame(cd24hi_1copy, max_p, max_ps)
+cd24hi_1copy
+
+
+
+```

@@ -1,0 +1,123 @@
+---
+title: "clonality_matcher"
+format: html
+editor: visual
+jupyter: python3
+author: HK / KP / WZ
+---
+
+# library
+
+```{r}
+
+# data manipulation
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(purrr)
+
+```
+
+# read in input files
+
+```{r}
+
+# set base directory & paths
+base_dir <- dirname(getwd())  
+
+# input & output path
+input_path <- file.path(base_dir, 
+                        "assign_purity_and_clonality", "output", "snv_with_clonality_output")
+
+output_path <- "output"
+
+```
+
+# pipeline
+
+```{r}
+
+# read in files
+CD24hi_files <- list.files(input_path, pattern = "hi.*\\.csv$", full.names = TRUE)
+CD24lo_files <- list.files(input_path, pattern = "mid.*\\.csv$", full.names = TRUE)
+
+# process each CD24lo file
+for (file_lo in CD24lo_files) {
+  k_number1 <- str_split(basename(file_lo), "-CD|_CD", simplify = TRUE)[1, 1]
+  k_number_write <- gsub("_", "-", k_number1)
+  k_number2 <- str_split(k_number1, "[-_]", simplify = F)[[1]]
+  k_number3 <- paste0(c(k_number2, "hi"), collapse = ".*")
+
+  
+  CD24lo_data <- read_csv(file_lo, col_names = FALSE) %>%
+    slice(-1) %>% # remove 1st row
+    rowwise() %>%
+    mutate(
+      coverage = as.integer(X18),
+      mut_allele = as.integer(X19),
+      qss = as.integer(X17),
+      cn = as.integer(X21),
+      synon = X10,
+      pval_clo = max(as.numeric(X37), as.numeric(X39), as.numeric(X41), as.numeric(X42)),
+      pval_sub = max(as.numeric(X36), as.numeric(X38), as.numeric(X40)),
+      rank = X45,
+      clonality = X43,
+      clonal_call = X46,
+      region = X7,
+      gene_nam = X8
+    ) %>%
+    ungroup() %>%
+    dplyr::select(location = X1, clonality, clonal_call, pval_clo, pval_sub, rank, coverage, mut_allele, cn, qss, synon, region, gene_nam)
+  
+  # match with CD24hi files
+  corresponding_hi_file <- CD24hi_files[str_detect(CD24hi_files, k_number3)]
+  if (length(corresponding_hi_file) == 1) {
+    CD24hi_data <- read_csv(corresponding_hi_file, col_names = FALSE) %>%
+      slice(-1) %>% # remove 1st row
+      rowwise() %>%
+      mutate(
+        coverage = as.integer(X18),
+        mut_allele = as.integer(X19),
+        qss = as.integer(X17),
+        cn = as.integer(X21),
+        synon = X10,
+        pval_clo = max(as.numeric(X37), as.numeric(X39), as.numeric(X41), as.numeric(X42)),
+        pval_sub = max(as.numeric(X36), as.numeric(X38), as.numeric(X40)),
+        rank = X45,
+        clonality = X43,
+        clonal_call = X46,
+        region = X7,
+        gene_nam = X8
+      ) %>%
+      ungroup() %>%
+      dplyr::select(location = X1, clonality, clonal_call, pval_clo, pval_sub, rank, coverage, mut_allele, cn, qss, synon, region, gene_nam)
+    
+    # combine & write csv
+    combined_data <- full_join(CD24lo_data, CD24hi_data, by = "location", suffix = c("_lo", "_hi")) %>%
+      mutate(
+        across(where(is.numeric), ~replace_na(., 0)),  
+        across(where(is.character), ~replace_na(., "0"))  
+        ) %>%
+      # fix column name
+      rename(`24loclonality` = clonality_lo,
+             `24lo_coverage` = coverage_lo,
+             `24lo_mut_allele` = mut_allele_lo,
+             `24lo_cn` = cn_lo,
+             `24lo_qss` = qss_lo,
+             `24lo_region` = region_lo,
+             `24hiclonality` = clonality_hi,
+             `24hi_coverage` = coverage_hi,
+             `24hi_mut_allele` = mut_allele_hi,
+             `24hi_cn` = cn_hi,
+             `24hi_qss` = qss_hi,
+             `24hi_region` = region_hi
+             )
+    
+    write_csv(combined_data, file.path(output_path, paste0(k_number_write, '.csv')))
+    
+  } else {print(paste0(k_number_write, " duplicate!"))}
+  
+}
+
+
+```

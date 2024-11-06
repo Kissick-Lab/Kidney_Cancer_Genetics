@@ -1,0 +1,188 @@
+---
+title: "assign purity & clonality"
+format: html
+editor: visual
+jupyter: python3
+author: HK / KP / WZ
+---
+
+# library
+
+```{r}
+
+# data manipulation
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(purrr)
+
+
+```
+
+# read in input files
+
+```{r}
+
+# purity data
+purity_data <- read.csv("input/purity/purity.csv") 
+
+
+# snv files
+files = list.files(path = "input/snv", 
+                   pattern = "\\.csv$", full.names = T)
+
+
+```
+
+# function for clonality
+
+```{r}
+
+process_file <- function(file_name, purity_data, output_dir) {
+  
+  cd24 <- read.csv(file_name)
+  nam <- basename(file_name)
+  purity <- purity_data %>%
+    filter(name == nam) %>%
+    pull(2) %>%
+    replace_na(1) %>%
+    if_else(. == 0, 1, .)
+  
+  # define parameters
+  pow = 0.5
+  one1 = 0.99 * purity
+  one2 = 0.5 * purity
+  two3 = 0.66 * purity
+  one3 = 0.33 * purity
+  backg = 0.25 
+
+  mutation_analysis <- cd24 %>%
+    mutate(
+      V41 = as.numeric(V41),
+      V42 = as.numeric(V42),
+      V44 = as.numeric(V44)) %>%
+    # get p.value for clonal & subclonal
+    rowwise() %>%
+    mutate(
+    x1_n = case_when(
+      V44 == 1 & V42 / V41 <= backg ~ 1,
+      V44 == 1 & V42 / V41 > backg ~ binom.test(V42, V41, backg)$p.value,
+      TRUE ~ 0  # default to 0 for other V44 values
+    ),
+    x1_1 = case_when(
+      V44 == 1 & V42 / V41 >= one1 ~ 1,
+      V44 == 1 & V42 / V41 < one1 ~ binom.test(V42, V41, one1)$p.value,
+      TRUE ~ 0
+    ),
+    x2_n = case_when(
+      V44 == 2 & V42 / V41 <= backg ~ 1,
+      V44 == 2 & V42 / V41 > backg ~ binom.test(V42, V41, backg)$p.value,
+      TRUE ~ 0
+    ),
+    x2_1 = case_when(
+      V44 == 2 & V42 / V41 >= one2 ~ 1,
+      V44 == 2 & V42 / V41 < one2 ~ binom.test(V42, V41, one2)$p.value,
+      TRUE ~ 0
+    ),
+    x3_n = case_when(
+      V44 == 3 & V42 / V41 <= backg ~ 1,
+      V44 == 3 & V42 / V41 > backg ~ binom.test(V42, V41, backg)$p.value,
+      TRUE ~ 0
+    ),
+    x3_1 = case_when(
+      V44 == 3 & V42 / V41 >= one3 ~ 1,
+      V44 == 3 & V42 / V41 < one3 ~ binom.test(V42, V41, one3)$p.value,
+      TRUE ~ 0
+    ),
+    x3_2 = case_when(
+      V44 == 3 & V42 / V41 >= two3 ~ 1,
+      V44 == 3 & V42 / V41 < two3 ~ binom.test(V42, V41, two3)$p.value,
+      TRUE ~ 0
+    )
+  ) %>%
+    ungroup() %>%
+    # get combo.pval
+    mutate(
+      combo.pval = case_when(
+        V44 == 1 ~ (x1_1^pow - x1_n^pow),
+        V44 == 2 ~ (x2_1^pow - x2_n^pow),
+        TRUE ~ 0
+      )
+    ) %>%
+    # get lenient clonality calling
+    mutate(
+      lenient = case_when(
+        combo.pval > 0 ~ "clonal",
+        combo.pval < 0 ~ "subclonal",
+        TRUE ~ "none"
+      )
+    ) %>%
+    # get ranking 
+    group_by(lenient) %>%
+    arrange(
+      case_when(
+        lenient == "clonal" ~ desc(combo.pval),
+        lenient == "subclonal" ~ combo.pval),
+      desc(V41), # break ties with descending coverage
+    .by_group = TRUE) %>%
+    mutate(rank = row_number()) %>%
+    ungroup() %>%
+    # strict clonality calling
+    mutate(
+      call = case_when(
+        lenient == "clonal" & rank <= 1000 ~ "clonal",
+        lenient == "subclonal" & rank <= 1000 ~ "subclonal",
+        TRUE ~ "unassigned"
+      )
+    ) 
+
+
+  write.csv(mutation_analysis, file.path(output_dir,
+                                         "snv_with_clonality_output", 
+                                         nam), row.names = F)
+  
+  # collecting results for each sample into a data frame
+  
+  qc <- mutation_analysis %>%
+    summarise(
+      SampleName = !!nam,  
+      SortPurity = !!purity,
+      SingleCopy = sum(V44 == 1),
+      DoubleCopy = sum(V44 == 2),
+      TripleCopy = sum(V44 == 3),
+      ErrorCount = sum(!V44 %in% 1:3),
+      MutationPre = nrow(!!cd24),  # using !! to ensure external data frame is recognized
+      MutationPost = n(),
+      Clonal1 = sum(V44 == 1 & call == "clonal"),
+      Subclonal1 = sum(V44 == 1 & call == "subclonal"),
+      Clonal2 = sum(V44 == 2 & call == "clonal"),
+      Subclonal2 = sum(V44 == 2 & call == "subclonal"),
+      pvalClonal = min(combo.pval[call == "clonal"], na.rm = TRUE),
+      pvalSubclonal = max(combo.pval[call == "subclonal"], na.rm = TRUE))
+  
+  return(qc)
+  
+}
+
+
+
+
+```
+
+# loop through all files & create sample_QC file
+
+```{r}
+
+output_dir = "output"
+
+dir.create(file.path(output_dir, "snv_with_clonality_output"), recursive = TRUE, showWarnings = FALSE)
+
+
+samples <- map_dfr(files, process_file, purity_data = purity_data, output_dir = output_dir)
+
+
+write.csv(samples, file.path(output_dir, "sampleQC.csv"))
+
+
+
+```
