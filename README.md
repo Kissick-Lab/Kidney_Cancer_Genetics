@@ -3,19 +3,19 @@
 This repository contains code and resources for analyzing genetic data related to kidney cancer
 
 ## Folder Structure
-### assign_purity_and_clonality
+### 1. assign_purity_and_clonality
 Contains code in a qmd file to assign purity and clonality for each mutation. 
 
-1_binomial_assignment.qmd: Contains code to fit mutations with 2 copies and 1 copy into a binomial distribution model
+1) 1_binomial_assignment.qmd: Contains code to fit mutations with 2 copies and 1 copy into a binomial distribution model
 
-2_purity_calculator.qmd: Contains code to calculate the purity associated with each mutation
+2) 2_purity_calculator.qmd: Contains code to calculate the purity associated with each mutation
 
-3_clonality.qmd: Contains code to calculate Clonal and Subclonal P-values for each mutation, providing an assessment of mutation clonality
+3) 3_clonality.qmd: Contains code to calculate Clonal and Subclonal P-values for each mutation, providing an assessment of mutation clonality
 
-### clonality_matcher
+### 2. clonality_matcher
 Contains code in a qmd file to match the same mutations between ENPP3lo and ENPP3hi cells, enabling downstream analysis of clonality relationship
 
-### clonality_relationship
+### 3. clonality_relationship
 Contains code in a qmd file to assign clonality relationship to each mutation
 
 ## Input data
