@@ -19,7 +19,7 @@ Contains code in a qmd file to match the same mutations between ENPP3lo and ENPP
 Contains code in a qmd file to assign clonality relationship to each mutation
 
 ## Input data
-The code utilizes genetic data from a patient (ID: K416) as an example dataset for analysis
+The code utilizes WGS data from patients K416, K469 as example datasets for analysis
 
 The following instructions outline the analysis each sample undertook and will generate output files of raw data corresponding to figures in the paper.
 
