@@ -1,0 +1,391 @@
+---
+title: "clonality_relationship"
+format: html
+editor: visual
+jupyter: python3
+---
+
+
+# library
+
+```{r}
+library(purrr)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+library(tidytext)
+```
+
+# ggplot aesthetics
+```{r}
+size = 8
+theme_custom = 
+  theme(
+    text = element_text(size = size, face = "bold", family = "Avenir"),
+    # y
+    # axis.title.y = element_blank(), 
+    axis.title.y = element_text(size = size, face = "bold", family = "Avenir"),
+    axis.text.y = element_text(size = size, face = "bold", family = "Avenir"),
+    axis.ticks.y = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.y = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    
+    # x
+    # axis.title.x = element_blank(), 
+    axis.title.x = element_text(size = size, face = "bold", family = "Avenir"),
+    axis.text.x = element_text(size = size, angle = 0),
+    axis.ticks.x = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.x = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    
+    
+    # panel
+    panel.grid = element_blank(),  # remove background grid
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank(),  # remove minor grid lines
+    panel.border = element_blank(),  # remove panel borders
+    panel.background = element_blank(),
+    
+    # facet
+    strip.background = element_rect(colour = "lightgray", fill = "white", size = 0.5, linetype = "solid"), 
+    strip.text.x = element_text(size = 8, color = "black", face = "bold", family = "Avenir"),
+    
+    # other
+    legend.position = "right",
+    aspect.ratio = 2 # make it thin
+    )
+
+
+```
+
+# get frequency of mutations that belong to different clonality relationship groups
+
+```{r}
+
+
+# Define column names for final data frame
+col_names <- c(
+  'filename',
+  'losub_lost', 'losub_clonal', 'losub_subclonal', 
+  'loclonal_lost', 'loclonal_clonal', 'loclonal_subclonal',
+  'hisub_lost', 'hisub_clonal', 'hisub_subclonal',
+  'hiclonal_lost', 'hiclonal_clonal', 'hiclonal_subclonal')
+
+
+# Duplicated locations to be removed
+dup_location = dup_location = read.csv("ref/dup_location.csv") %>% pull(location)
+
+# Function to process a single file
+process_file_freq <- function(file, n) {
+  
+  k <- read.csv(file)
+  k[is.na(k)] <- 0
+  
+  # Remove duplicated location
+  k = k %>%
+    filter(!location %in% dup_location) %>%
+    # lenient
+    mutate(
+    lenient_lo = case_when(
+      pval_clo_lo > pval_sub_lo ~ "Clonal",
+      pval_clo_lo < pval_sub_lo ~ "Subclonal",
+      TRUE ~ "Unassigned"
+      ),
+    lenient_hi = case_when(
+      pval_clo_hi > pval_sub_hi ~ "Clonal",
+      pval_clo_hi < pval_sub_hi ~ "Subclonal",
+      TRUE ~ "Unassigned"
+      )
+  ) 
+  
+  filename = gsub("\\.csv", "", basename(file))
+
+  k_lo <- k %>% filter(X24lo_coverage > 10)
+  k_hi <- k %>% filter(X24hi_coverage > 10)
+  
+  # Create temporary data frames
+  tmp_n_loclonal <- k_lo %>% arrange(desc(X24loclonality), desc(X24lo_coverage)) %>% slice(1:n) %>%
+    filter(lenient_lo == "Clonal")
+  tmp_n_losub <- k_lo %>% arrange(X24loclonality, desc(X24lo_coverage)) %>% slice(1:n) %>%
+    filter(lenient_lo == "Subclonal") 
+  tmp_n_hiclonal <- k_hi %>% arrange(desc(X24hiclonality), desc(X24hi_coverage)) %>% slice(1:n) %>%
+    filter(lenient_hi == "Clonal") 
+  tmp_n_hisub <- k_hi %>% arrange(X24hiclonality, desc(X24hi_coverage)) %>% slice(1:n) %>%
+    filter(lenient_hi == "Subclonal")
+  
+  
+  # Calculate clonal_lo metrics
+  total_clonal_lo = 
+    sum(tmp_n_loclonal$pval_clo_hi == 0) + 
+    sum(tmp_n_loclonal$pval_clo_hi > 0.8 & tmp_n_loclonal$pval_sub_hi < 0.2) + 
+    sum(tmp_n_loclonal$pval_clo_hi < 0.1 & tmp_n_loclonal$pval_sub_hi > 0.9)
+    
+  clonal_lo <- c(
+    sum(tmp_n_loclonal$pval_clo_hi == 0) / total_clonal_lo,
+    sum(tmp_n_loclonal$pval_clo_hi > 0.8 & tmp_n_loclonal$pval_sub_hi < 0.2) / total_clonal_lo,
+    sum(tmp_n_loclonal$pval_clo_hi < 0.1 & tmp_n_loclonal$pval_sub_hi > 0.9) / total_clonal_lo
+  )
+
+  # Calculate subclonal_lo metrics
+  
+  total_subclonal_lo = 
+    sum(tmp_n_losub$pval_clo_hi == 0) + 
+    sum(tmp_n_losub$pval_clo_hi > 0.8 & tmp_n_losub$pval_sub_hi < 0.2) + 
+    sum(tmp_n_losub$pval_clo_hi < 0.1 & tmp_n_losub$pval_sub_hi > 0.9)
+    
+  subclonal_lo <- c(
+    sum(tmp_n_losub$pval_clo_hi == 0) / total_subclonal_lo,
+    sum(tmp_n_losub$pval_clo_hi > 0.8 & tmp_n_losub$pval_sub_hi < 0.2) / total_subclonal_lo,
+    sum(tmp_n_losub$pval_clo_hi < 0.1 & tmp_n_losub$pval_sub_hi > 0.9) / total_subclonal_lo
+  )
+
+  # Calculate clonal_hi metrics
+  
+  total_clonal_hi = 
+    sum(tmp_n_hiclonal$pval_clo_lo == 0) + 
+    sum(tmp_n_hiclonal$pval_clo_lo > 0.8 & tmp_n_hiclonal$pval_sub_lo < 0.2) + 
+    sum(tmp_n_hiclonal$pval_clo_lo < 0.1 & tmp_n_hiclonal$pval_sub_lo > 0.9)
+    
+  clonal_hi <- c(
+    sum(tmp_n_hiclonal$pval_clo_lo == 0) / total_clonal_hi,
+    sum(tmp_n_hiclonal$pval_clo_lo > 0.8 & tmp_n_hiclonal$pval_sub_lo < 0.2) / total_clonal_hi,
+    sum(tmp_n_hiclonal$pval_clo_lo < 0.1 & tmp_n_hiclonal$pval_sub_lo > 0.9) / total_clonal_hi
+  )
+
+  # Calculate subclonal_hi metrics
+  
+  total_subclonal_hi = 
+    sum(tmp_n_hisub$pval_clo_lo == 0) + 
+    sum(tmp_n_hisub$pval_clo_lo > 0.8 & tmp_n_hisub$pval_sub_lo < 0.2) + 
+    sum(tmp_n_hisub$pval_clo_lo < 0.1 & tmp_n_hisub$pval_sub_lo > 0.9)
+    
+  subclonal_hi <- c(
+    sum(tmp_n_hisub$pval_clo_lo == 0) / total_subclonal_hi,
+    sum(tmp_n_hisub$pval_clo_lo > 0.8 & tmp_n_hisub$pval_sub_lo < 0.2) / total_subclonal_hi,
+    sum(tmp_n_hisub$pval_clo_lo < 0.1 & tmp_n_hisub$pval_sub_lo > 0.9) / total_subclonal_hi
+  )
+
+  # Combine all metrics into a single vector
+  final_num <- c(subclonal_lo, clonal_lo, subclonal_hi, clonal_hi)
+  final_num = as.character(final_num)
+  
+  final <- c(filename, final_num)
+
+  return(final)
+}
+
+
+
+# A vector of files to process
+selected_files = list.files("input", "\\.csv", full.names = TRUE)
+
+
+# Function to process all files
+process_files_for_n <- function(n) {
+
+  # Process all files & combine results into a single data frame
+  final_results <- selected_files %>%
+    map(~ process_file_freq(.x, n)) %>%
+    do.call(rbind, .) %>%
+    as_tibble() %>%
+    set_names(col_names)
+
+  # Save final data frame to a CSV file
+  write_csv(final_results, paste0("output/clonal_relationship_freq_", n, ".csv"))
+}
+
+
+# Process all files
+walk(500, process_files_for_n)
+
+
+
+```
+
+
+# plot clonality relationship
+```{r}
+
+
+selected_files = list.files("input", "\\.csv", full.names = TRUE)
+
+
+k <- read.csv(selected_files)
+k[is.na(k)] <- 0
+k = k %>%
+  filter(!location %in% dup_location) 
+
+# CCF
+k = k %>%
+  mutate(CCF_lo = (X24lo_mut_allele / X24lo_coverage) * X24lo_cn,
+         CCF_hi = (X24hi_mut_allele / X24hi_coverage) * X24hi_cn) %>%
+  mutate(CCF_lo = ifelse(CCF_lo > 1, 1, CCF_lo),
+         CCF_hi = ifelse(CCF_hi > 1, 1, CCF_hi)) %>%
+  mutate(CCF_lo = replace_na(CCF_lo, 0),
+         CCF_hi = replace_na(CCF_hi, 0)) %>%
+  mutate(
+    lenient_lo = case_when(
+      pval_clo_lo > pval_sub_lo ~ "Clonal",
+      pval_clo_lo < pval_sub_lo ~ "Subclonal",
+      TRUE ~ "Unassigned"
+      ),
+    lenient_hi = case_when(
+      pval_clo_hi > pval_sub_hi ~ "Clonal",
+      pval_clo_hi < pval_sub_hi ~ "Subclonal",
+      TRUE ~ "Unassigned"
+      )
+  ) 
+
+
+
+k_lo <- k %>% filter(X24lo_coverage > 10)
+k_hi <- k %>% filter(X24hi_coverage > 10)
+
+# Create temporary data frames
+n = 500
+
+tmp_n_loclonal <- k_lo %>% arrange(desc(X24loclonality), desc(X24lo_coverage)) %>% slice(1:n) %>%
+  filter(lenient_lo == "Clonal") %>%
+  mutate(from = paste0("CD24lo Clonal")) %>%
+  mutate(to = case_when(
+    pval_clo_hi == 0 ~ "CD24hi Lost",
+    pval_clo_hi > 0.8 & pval_sub_hi < 0.2 ~ "CD24hi Clonal",
+    pval_clo_hi < 0.1 & pval_sub_hi > 0.9 ~ "CD24hi Subclonal",
+    TRUE ~ "Other"
+  ))
+  
+
+tmp_n_losub <- k_lo %>% arrange(X24loclonality, desc(X24lo_coverage)) %>% slice(1:n) %>%
+   filter(lenient_lo == "Subclonal") %>%
+   mutate(from = paste0("CD24lo Subclonal")) %>% 
+   mutate(to = case_when(
+    pval_clo_hi == 0 ~ "CD24hi Lost",
+    pval_clo_hi > 0.8 & pval_sub_hi < 0.2 ~ "CD24hi Clonal",
+    pval_clo_hi < 0.1 & pval_sub_hi > 0.9 ~ "CD24hi Subclonal",
+    TRUE ~ "Other"
+  )) 
+
+tmp_n_hiclonal <- k_hi %>% arrange(desc(X24hiclonality), desc(X24hi_coverage)) %>% slice(1:n) %>%
+  filter(lenient_hi == "Clonal") %>%
+  mutate(from = paste0("CD24hi Clonal")) %>%
+  mutate(to = case_when(
+    pval_clo_lo == 0 ~ "CD24lo Lost",
+    pval_clo_lo > 0.8 & pval_sub_lo < 0.2 ~ "CD24lo Clonal",
+    pval_clo_lo < 0.1 & pval_sub_lo > 0.9 ~ "CD24lo Subclonal",
+    TRUE ~ "Other"
+  )) 
+
+tmp_n_hisub <- k_hi %>% arrange(X24hiclonality, desc(X24hi_coverage)) %>% slice(1:n) %>%
+  filter(lenient_hi == "Subclonal") %>%
+  mutate(from = paste0("CD24hi Subclonal")) %>%
+  mutate(to = case_when(
+    pval_clo_lo == 0 ~ "CD24lo Lost",
+    pval_clo_lo > 0.8 & pval_sub_lo < 0.2 ~ "CD24lo Clonal",
+    pval_clo_lo < 0.1 & pval_sub_lo > 0.9 ~ "CD24lo Subclonal",
+    TRUE ~ "Other"
+  ))
+
+
+  
+df = rbind(tmp_n_loclonal,
+           tmp_n_losub,
+           tmp_n_hiclonal,
+           tmp_n_hisub
+           )
+
+
+df = df %>%
+  filter(to != "Other") %>%
+  # do not show sub-sub * clo-lost 
+  mutate(from_to = paste(from, to, sep = "_")) %>%
+  filter(!from_to %in% c(
+    "CD24lo Clonal_CD24hi Lost",
+    "CD24hi Clonal_CD24lo Lost",
+    "CD24lo Subclonal_CD24hi Subclonal",
+    "CD24hi Subclonal_CD24lo Subclonal"
+  )) %>%
+  select(location, CCF_lo, CCF_hi, from_to, from, to) %>%
+  group_by(from_to) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  pivot_longer(
+    cols = starts_with("CCF"),
+    names_to = "Cell",
+    values_to = "CCF"
+  ) %>%
+  mutate(Cell = paste0("CD24", 
+                       sapply(str_split(Cell, "_"), `[`, 2))) %>%
+  mutate(Cell = factor(Cell, levels = c("CD24lo", "CD24hi"))) %>%
+  mutate(from_cell = str_extract(from, pattern = "CD24lo|CD24hi"))
+  
+
+
+# CD24hi & CD24lo different order for cell
+df = df %>%
+    mutate(category_ordered = case_when(
+    from_cell == "CD24lo" & Cell == "CD24lo" ~ 0,
+    from_cell == "CD24lo" & Cell == "CD24hi" ~ 1,
+    from_cell == "CD24hi" & Cell == "CD24lo" ~ 1,
+    from_cell == "CD24hi" & Cell == "CD24hi" ~ 0,
+    TRUE ~ NA_integer_
+  ))
+
+
+
+ggplot(df, aes(reorder_within(Cell, category_ordered, from_cell), CCF,
+               group = interaction(location, from_to))) + 
+  geom_line(aes(color = from_to), linewidth = 0.2, 
+            position = position_jitter(width = 0.02, height = 0.02, seed = 1)) + 
+  facet_wrap(vars(from_cell), nrow = 1, 
+             scales = "free_x") +
+  scale_color_manual(values = 
+                         c(# Clonal
+                           "CD24hi Clonal_CD24lo Clonal" = "#EF3B397D",
+                           "CD24hi Clonal_CD24lo Subclonal" = "#409B437D",
+                           "CD24lo Clonal_CD24hi Clonal" = "#EF3B397D",
+                           "CD24lo Clonal_CD24hi Subclonal" = "#2529267D",
+                           # Subclonal
+                           "CD24hi Subclonal_CD24lo Lost" = "#0089CD96",
+                           "CD24hi Subclonal_CD24lo Clonal" = "#2529267D",
+                           "CD24lo Subclonal_CD24hi Lost" = "#9A258F7D",
+                           "CD24lo Subclonal_CD24hi Clonal" = "#409B437D"),
+                     labels = 
+                           c(
+                            # Clonal
+                           "CD24hi Clonal_CD24lo Clonal" = "Maintained",
+                           "CD24hi Clonal_CD24lo Subclonal" = "CD24lo -> CD24hi\nSelected",
+                           "CD24lo Clonal_CD24hi Clonal" = "Maintained",
+                           "CD24lo Clonal_CD24hi Subclonal" = "CD24hi -> CD24lo\nSelected",
+                           # Subclonal
+                           "CD24hi Subclonal_CD24hi Lost" = "CD24hi Private from Subclonal",
+                           "CD24hi Subclonal_CD24lo Clonal" = "CD24hi -> CD24lo\nSelected",
+                           "CD24lo Subclonal_CD24hi Lost" = "CD24lo Private from Subclonal",
+                           "CD24lo Subclonal_CD24hi Clonal" = "CD24lo -> CD24hi\nSelected")
+                     ) +
+  scale_x_reordered() +
+  labs(x = "Cell", y = "CCF", 
+       color = "Group",
+       alpha = "Group") + 
+  guides(alpha = FALSE) + # Remove alpha legend
+  theme_custom
+  
+
+
+
+# clonal to clonal 
+"#EF3B397D"
+# subclonal lo to clonal hi 
+"#409B437D"
+# subclonal hi to clonal lo 
+"#2529267D"
+# clonal lo lost in hi 
+"#9A258F7D"
+# clonal hi lost in lo 
+"#0089CD96"
+# sub to sub
+"lightgray"
+
+
+
+```
+
