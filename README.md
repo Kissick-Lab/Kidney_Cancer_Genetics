@@ -21,6 +21,7 @@ Contains code in a qmd file to assign clonality relationship to each mutation
 ## Input data
 The code utilizes WGS data from patients K416, K469 as example datasets for analysis
 
+## Instruction
 The following instructions outline the analysis each sample undertook and will generate output files of raw data corresponding to figures in the paper.
 
 ### 1.	Binomial Assignment:
