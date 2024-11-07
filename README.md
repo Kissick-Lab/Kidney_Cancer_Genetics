@@ -57,7 +57,7 @@ Same file format as the input .csv file, but now contains statistics for each mu
 
 ### 4.	Clonality Matcher:
    
-	This script takes the ENPP3hi and ENPP3lo files from each patient and outputs a file with the frequency and other details of each mutation in each sample.
+This script takes the ENPP3hi and ENPP3lo files from each patient and outputs a file with the frequency and other details of each mutation in each sample.
 
 Input files:
 Output from the clonality script for both ENPP3hi and ENPPlo cells from 1 patient
