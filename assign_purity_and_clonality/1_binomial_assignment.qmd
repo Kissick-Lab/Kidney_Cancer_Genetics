@@ -11,7 +11,9 @@ library(MASS)
 library(cardelino)
 ```
 
-2 copy = 2 binomial component 1 clonal (high p) 1 subclonal (low p) 1 copy = 3 binomial component
+2 copy = 2 binomial component 1 clonal (high p) 1 subclonal (low p)
+
+1 copy = 3 binomial component
 
 ```{r}
 
@@ -120,10 +122,6 @@ cd24hi_2copy = read.csv("output/purity/2copy_fit_24hi.csv")
 cd24hi_1copy = cd24hi_1copy[2:nrow(cd24hi_1copy),]
 cd24hi_2copy = cd24hi_2copy[2:nrow(cd24hi_2copy),]
 
-max_p = c(as.matrix(apply(cd24hi_1copy, 1, function(x) which.max(x[3:5]))))
-max_ps = c(as.matrix(apply(cd24hi_1copy,1, function(x) which.max(x[6:8]))))
-cd24hi_1copy = data.frame(cd24hi_1copy, max_p, max_ps)
-cd24hi_1copy
 
 
 
